@@ -1,0 +1,2637 @@
+<html>
+<head><script>(function(){
+    let {ipcRenderer, shell} = require('electron');
+    let http = require('http');
+    let https = require('https');
+    let fs = require('fs');
+    let openExternal = shell.openExternal;
+    let isDir = function(path){
+        try {
+            return fs.lstatSync(path).isDirectory();
+        }
+        catch (e) {
+            return false;
+        }
+    }
+    let os = {"path": require('path')};
+    let events=[];
+    window.$=function(selector){
+        let f = {
+            ready: function(func){
+                events.push([selector, 'ready', [func]]);
+            },
+            on: function(name, func){
+                events.push([selector, 'on', [name, func]]);
+            }
+        }
+        return f;
+    }
+    window.$.post= function(url, cb){
+        events.push([null, 'post', [url, cb]]);
+    }
+    window.__$=$;
+    window.$.post("https://pan.baidu.com/share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1", function(r){
+    });
+    window.$.post("https://pan.baidu.com/share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1", function(r){
+    });
+    window.$(document).ready(function(){
+        $("h1 a:not([id])").on("click", function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            openExternal(this.href);
+        });
+        $("#dispatch_dialog a").on("click", function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            openExternal(this.href);
+        });
+        $("#dispatch_dialog input#save_path").on("blur", function () {
+            $("#path_hint").remove();
+        });
+        $("#dispatch_dialog input#save_path").on("keyup", function(){
+            let path = $(this).val();
+            if(!path){
+                return;
+            }
+            $("#path_hint").remove();
+            let dir = os.path.dirname(path);
+            let trail = ["/","\\"].indexOf(path.slice(-1)[0])!==-1;
+            trail&&(dir=path);
+            let htmls = "<div id='path_hint'>";
+            let children = [];
+            if(dir!==path||trail){
+                for(let child of fs.readdirSync(dir)){
+                    let c = os.path.join(dir, child);
+                    if(!isDir(c)){
+                        continue;
+                    }
+                    if(c.indexOf(path)===-1){
+                        continue;
+                    }
+                    children.push([c, child]);
+                }
+            }
+            let theme = 0;
+            if(window.localStorage2["aria2_config"]){
+                theme = JSON.parse(window.localStorage2["aria2_config"])[7]==="light";
+            }
+            for(let [c, child] of children){
+                htmls += "<div style='" +
+                    "overflow: hidden;" +
+                    "text-overflow: ellipsis;" +
+                    "font-size: 2em;" +
+                    "border: 1px solid #"+(theme?"333333":"d9d9d9")+";" +
+                    "border-top: 0;" +
+                    "padding:0.25em;" +
+                    "background-color: rgba("+(theme?"255,255,255,0.9":"0,0,0,0.75")+");" +
+                    "'>"+$("<p/>").text(c).html()+"</div>";
+            }
+            htmls += "</div>";
+            $(this).after($(htmls).css({
+                "height":"50vh",
+                "overflow":"auto",
+                "margin-top":"-1em",
+                "z-index":"2",
+                "width":$(this).outerWidth(),
+                "position": "absolute",
+                "top": "4.8em"
+                // "top": $(this).offset().top+$(this).outerHeight(),
+                // "left": $(this).offset().left
+            }))
+        });
+    });
+    let mitm;
+    let start_proxy = function(){
+        aria2proxy = new mitm.default();
+        aria2proxy.onError(function(ctx, err) {
+            let url = ctx.proxyToServerRequestOptions.headers["host"]+ctx.proxyToServerRequestOptions.path;
+            let range0 = parseInt(ctx.proxyToServerRequestOptions.headers["range"].split("=").pop().split("-")[0]);
+            if(!((url+"_"+range0) in get_baidupcs_range_jobs)){
+                get_baidupcs_range_jobs[url+"_"+range0] = [0,[]];
+            }
+            get_baidupcs_range_jobs[url+"_"+range0][0] = 1;
+            console.error('proxy error:', new Date().toLocaleString(), err, url+"_"+range0, ctx);
+        });
+        aria2proxy.onRequestHeaders(function(ctx, callback){
+            let host = ctx.proxyToServerRequestOptions.headers["host"];
+            // console.log(url.slice(0, 50));
+            if(host.indexOf("baidupcs")===-1){
+                return callback();
+            }
+            handle_baidupcs_request(host, ctx, callback);
+        });
+        aria2proxy.listen({port: 16801});
+    }
+    let rti=setInterval(function(){
+        try{
+            //require("@electron/remote");
+            window.$=window.jQuery=require("jquery");
+            mitm = require('http-mitm-proxy');
+            //let prompt = require('electron-prompt');
+            clearInterval(rti);
+            /*window.prompt = function (a){
+                return prompt({
+                    title: "Prompt",
+                    label: a,
+                    width: 400,
+                    height: 200,
+                    buttonLabels:{
+                        ok: "提交",
+                        cancel: "取消"
+                    },
+                    alwaysOnTop: true
+                });
+            }*/
+            setTimeout(start_proxy);
+            window.history.pushState("","","http://baiduwp.cf/");
+            for(let [selector, func, args] of events){
+                if(selector===null){
+                    window.$[func].apply(window.$, args);
+                    continue;
+                }
+                window.$(selector)[func].apply(window.$, args);
+            }
+
+        }catch(e){
+            // console.log(e)
+        }
+    }, 500);
+    //delete window.module;
+    let get_localStorage = function(cb, cb2) {
+        ipcRenderer.on('set_localStorage', function(event, arg) {
+            // console.log(arg);
+            cb2&&cb2(arg);
+        })
+        ipcRenderer.send('get_localStorage')
+        ipcRenderer.on('get_localStorage', function(event, arg) {
+            window._localStorage2 = arg;
+            let argp = new Proxy(arg, {
+                set: function (target, key, value) {
+                    target[key] = value;
+                    ipcRenderer.send('set_localStorage', JSON.stringify(window._localStorage2));
+                    return true;
+                },
+                deleteProperty(target, propKey) {
+                    delete target[propKey];
+                    return true;
+                }
+            });
+            window.localStorage2 = argp;
+            cb&&cb();
+        })
+    }
+    get_localStorage(function () {
+        // window.localStorage2.a = 0;
+    });
+    window.startaria2proxy = start_proxy;
+    window.stoparia2proxy = function() {
+        return aria2proxy.close();
+    };
+    window.aria2proxyport = function() {
+        return aria2proxy.httpPort;
+    };
+    let aria2proxy;
+    let uac = {};
+    let get_baidupcs_range_jobs = {};
+    let handle_baidupcs_request = function(host, ctx, _callback){
+        let callback = function(){
+            try{
+                return _callback();
+            }
+            catch(e){}
+        }
+        let url = host+ctx.proxyToServerRequestOptions.path;
+        let headers = ctx.proxyToServerRequestOptions.headers;
+        if(!("user-agent" in headers)){
+            return callback();
+        }
+        if(headers["user-agent"]!=="foxe6") {
+            if(headers["user-agent"].indexOf("netdisk")!==0){
+                headers["user-agent"] = "Mozilla/0.0.0";
+                return callback();
+            }
+            return callback();
+        }
+        // if(host.match(/^[0-9]/)){
+        //     return callback();
+        // }
+        // console.log(url, url in uac, headers);
+        if(url in uac){
+            return get_baidupcs_range(host, url, headers, ctx, callback);
+        }
+        // if(host.slice(0, 3)==="nd6")
+        //     console.log(url, headers)
+        if('range' in headers){
+            let ti = setInterval(function(){
+                if(!(url in uac)){
+                    return;
+                }
+                clearInterval(ti);
+                get_baidupcs_range(host, url, headers, ctx, callback);
+            }, 500);
+            return;
+        }
+        get_suitable_ua(host, url, headers, ctx, callback);
+    }
+    let get_suitable_ua = function(host, url, headers, ctx, callback){
+        if(url in uac){
+            host&&get_baidupcs_range(host, url, headers, ctx, callback);
+            !host&&callback&&callback(uac[url]);
+            return;
+        }
+        let uaa = window.download_useragent;
+        let uab = "netdisk";
+        (function abc(_url){
+            let req = http.request(_url, {
+                method: 'GET',
+                headers:{
+                    "user-agent":uab,
+                    "range": "bytes=0-1",
+                    "ACCEPT-LANGUAGE": "zh-CN",
+                    "ACCEPT": "*/*"
+                }
+            }, function(res) {
+                let ss = res["statusCode"];
+                if(ss===302){
+                    // console.log(_url, "==>", res.headers["location"])
+                    if(res.headers["location"].indexOf("http://www.baidupcs.com/")===-1) {
+                        return abc(res.headers["location"]);
+                    }
+                    else{
+                        uac[url] = uac[_url.split("://")[1]] = uaa;
+                    }
+                }
+                else if(ss===206){
+                    uac[url] = uac[_url.split("://")[1]] = uab;
+                }
+                else if(ss>=400){
+                    uac[url] = uac[_url.split("://")[1]] = uaa;
+                }
+                else{
+                    uac[url] = uac[_url.split("://")[1]] = uab;
+                }
+                // console.log(url, uac[url]);
+                console.log(url, _url, ss, uac[url], res);
+                host&&get_baidupcs_range(host, url, headers, ctx, callback);
+                !host&&callback&&callback(uac[url]);
+            });
+            req.on("error", function(){
+                abc(_url);
+            })
+            req.end();
+        })("http://"+url);
+        // headers["user-agent"] = "netdisk;P2SP;3.0.0.183");
+    }
+    window.get_suitable_ua = function(url, cb){
+        return get_suitable_ua(null, url, null, null, cb);
+    }
+    let get_baidupcs_range = function(host, url, headers, ctx, callback){
+        headers["user-agent"] = uac[url];
+        let size = parseInt(url.split("&size=")[1].split("&")[0]);
+        // ctx.proxyToServerRequestOptions.path = url.replace(host, "");
+        if(!('range' in headers)){
+            // headers["range"] = "bytes=0-"+(Math.min(size,1024*1024)-1);
+            headers["range"] = "bytes=0-"+(size-1);
+        }
+        // console.log(url, headers);
+        let range = headers["range"];
+        range = range.split("=").pop().split("-").map(function(e){
+            return parseInt(e);
+        });
+        let max_size = 1*1024*1024;
+        let diff = range[1]-range[0]+1;
+        if(diff>1*1024*1024){
+            // range[1] = (Math.min(size, range[0]+max_size)-1);
+            // headers["range"] = "bytes="+range[0]+"-"+range[1];
+            // console.log(url, diff, diff/1024/1024);
+        }
+        //console.log(ctx);
+        // console.log(new Date().toLocaleString(), url, headers, ctx);
+        let write_header = function(head){
+            head = head||{
+                "server": "foxe6-proxy",
+                "accept-ranges": "bytes",
+                "content-type": "application/octet-stream",
+            };
+            head["content-range"] = "bytes "+range[0]+"-"+range[1]+"/"+size;
+            head["content-length"] = range[1]-range[0]+1;
+            ctx.proxyToClientResponse.writeHead(
+                206,
+                head
+            );
+        }
+        let wrote_header=0;
+        let joblog = [0, []];
+        if((url+"_"+range[0]) in get_baidupcs_range_jobs){
+            joblog = get_baidupcs_range_jobs[url+"_"+range[0]]
+        }
+        else{
+            get_baidupcs_range_jobs[url+"_"+range[0]] = joblog;
+        }
+        if(joblog[0]===-1){
+            joblog[0] = 0;
+        }
+        for(let kk in get_baidupcs_range_jobs){
+            if(get_baidupcs_range_jobs[kk][0]===2){
+                delete get_baidupcs_range_jobs[kk];
+            }
+        }
+        let index = range[0];
+        let method1 = 1;
+        let job = function(){
+            // console.error(url+"_"+range[0], joblog[0)
+            if(joblog[0]){
+                joblog[0] = joblog[0]===1?-1:joblog[0];
+                ctx.proxyToClientResponse.end();
+                callback();
+                return;
+            }
+            if(index>range[1]){
+                joblog[0] = 2;
+                ctx.proxyToClientResponse.end();
+                callback();
+                return;
+            }
+            let start = index;
+            let wrote=0;
+            let end = Math.min(index+max_size-1, range[1]);
+            let _headers;
+            let abc = function(){
+                if(joblog[0]){
+                    joblog[0] = joblog[0]===1?-1:joblog[0];
+                    ctx.proxyToClientResponse.end();
+                    callback();
+                    return;
+                }
+                _headers = JSON.parse(JSON.stringify(headers));
+                _headers["range"] = "bytes="+start+"-"+end;
+                delete _headers["host"];
+                let req = http.request("http://"+url, {
+                    method: 'GET',
+                    "headers": _headers
+                }, function(res) {
+                    if(joblog[0]){
+                        joblog[0] = joblog[0]===1?-1:joblog[0];
+                        ctx.proxyToClientResponse.end();
+                        callback();
+                        return;
+                    }
+                    // console.log(_url, res);
+                    let ss = res["statusCode"];
+                    if(ss===302||ss===206){
+                        let redirect_url = ss===302?res.headers["location"]:"http://"+url;
+                        // console.log(url, "==>", redirect_url)
+                        if(redirect_url.indexOf("http://www.baidupcs.com/")===-1) {
+                            // next(redirect_url);
+                            // console.log("ok");
+                            _headers = JSON.parse(JSON.stringify(headers));
+                            _headers["range"] = "bytes="+start+"-"+end;
+                            delete _headers["host"];
+                            let req2 = http.request(redirect_url, {
+                                method: 'GET',
+                                "headers": _headers
+                            }, function(res){
+                                if(joblog[0]){
+                                    joblog[0] = joblog[0]===1?-1:joblog[0];
+                                    ctx.proxyToClientResponse.end();
+                                    callback();
+                                    return;
+                                }
+                                if(res["statusCode"]!==206){
+                                    console.warn(url, redirect_url, _headers, res.headers);
+                                }
+                                // res.setEncoding('utf8');
+                                let rawData = [];
+                                // console.log(new Date().toLocaleString(), range[0], start, end, (range[1]-range[0]+1)/1024/1024, res);
+                                res.on('data', (chunk) => {
+                                    if(joblog[0]){
+                                        joblog[0] = joblog[0]===1?-1:joblog[0];
+                                        ctx.proxyToClientResponse.end();
+                                        callback();
+                                        return;
+                                    }
+                                    if(!wrote_header){
+                                        // console.warn(typeof chunk, chunk);
+                                        wrote_header=1;
+                                        write_header(res.headers);
+                                    }
+                                    if(method1) {
+                                        ctx.proxyToClientResponse.write(chunk);
+                                        wrote += chunk.length;
+                                    }
+                                    else{
+                                        rawData.push(chunk);
+                                    }
+                                    joblog[1] = [start, end, range[1]];
+                                    let _log=Object.keys(get_baidupcs_range_jobs).map(function(kk){
+                                        let vv = get_baidupcs_range_jobs[kk];
+                                        let range0 = kk.split(/_/g).pop();
+                                        return [kk.replace("_"+range0, ""), parseInt(range0), vv];
+                                        // return kk.replace("_"+range0, "")+" "+range0+" "+vv.join(" ");
+                                    }).sort(function(a,b){
+                                        let r0 = a[0].localeCompare(b[0]);
+                                        if(r0){
+                                            return r0;
+                                        }
+                                        return a[1]-b[1];
+                                    }).map(function(_vv){
+                                        let [kk, range0, vv] = _vv;
+                                        return kk.split("?")[0]+" "+vv[0]+" "+range0+" "+vv[1].map(function(e){
+                                            return e.toString();
+                                        }).join(" ");
+                                    }).join("\n");
+                                    // console.log(_log);
+                                    // console.log(range[0], start, end, (range[1]-range[0]+1)/1024/1024, chunk.length/1024/1024);
+                                    // rawData.push(Buffer.from(chunk));
+                                    // rawData.push(chunk);
+                                    // ctx.proxyToClientResponse.write(rawData);
+                                });
+                                res.on('end', () => {
+                                    if(joblog[0]){
+                                        joblog[0] = joblog[0]===1?-1:joblog[0];
+                                        ctx.proxyToClientResponse.end();
+                                        callback();
+                                        return;
+                                    }
+                                    if(method1) {
+                                        index = index+max_size;
+                                        job();
+                                    }
+                                    else{
+                                        rawData = Buffer.concat(rawData);
+                                        // ctx.proxyToClientResponse.write(new Uint8Array(rawData));
+                                        wrote+=rawData.length;
+                                        ctx.proxyToClientResponse.write(rawData);
+                                        rawData=null;
+                                        index = index+max_size;
+                                        // console.log(range[0], start, end, (range[1]-range[0]+1)/1024/1024, rawData.length/1024/1024);
+                                        job();
+                                    }
+                                });
+                            });
+                            req2.on("error", function(){
+                                console.log("failed 1", start, wrote);
+                                start += wrote;
+                                if(start>=end){
+                                    index = index+max_size;
+                                    job();
+                                    return;
+                                }
+                                abc();
+                            })
+                            req2.end();
+                        }
+                        else{
+                            console.log("not ok", url, redirect_url, _headers, res.headers);
+                            abc();
+                        }
+                    }
+                    else{
+                        console.log("not ok", url, redirect_url, _headers, res.headers);
+                        abc();
+                    }
+                });
+                req.on("error", function(){
+                    console.log("failed 0", start, wrote);
+                    abc();
+                })
+                req.end();
+            }
+            abc();
+        }
+        job();
+    }
+})();</script>
+    <title>在线解析 | 百度网盘</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <meta name="description" content="在线解析高速下载链接 | 百度网盘 baidu wangpan, a foxe6 project">
+<!--    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.3/jquery.min.js"></script>-->
+    <style>
+html, body, 
+table th,
+table td{
+    margin: 0;
+    padding: 0;
+}
+fieldset{
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+body{
+    min-width: 900px;
+    min-height: 900px;
+    color: #d9d9d9;
+    background-color: black;
+    font-family: "Microsoft JhengHei", sans-serif;
+}
+input:not([type="radio"]){
+    -webkit-appearance: none;
+    font-size: 2em;
+    border: 1px solid #d9d9d9;
+    margin: 0;
+    border-radius: 0.25em;
+    padding: 0.25em 0;
+    color: #d9d9d9;
+    text-align: center;
+    background-color: black;
+}
+input:not([type="button"]){
+    padding: 0.25em;
+}
+table{
+    border-collapse: collapse;
+}
+*{
+    user-select: none;
+    -ms-user-select: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+}
+select,
+input{
+    user-select: auto;
+    -ms-user-select: auto;
+    -moz-user-select: auto;
+    -webkit-user-select: auto;
+}
+h1{
+    text-align: center;
+    font-size: 2.5em;
+    margin: 0.5em 0;
+}
+div{
+    position: relative;
+}
+h1>a {
+    vertical-align: middle;
+    color: inherit;
+    text-underline-offset: 7px;
+}
+h1>a.shrink {
+    font-size: 0.5em;
+}
+div#form{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-content: center;
+    flex-wrap: wrap;
+    padding: 1em 0;
+    border-top: 3px solid #d9d9d9;
+    width: 80%;
+    margin: 0 auto;
+}
+div#form input{
+    width: 100%;
+    font-size: 1.75em;
+}
+div#form input#parse{
+    cursor: pointer;
+    background-color: rgb(153, 153, 153);
+    border-color: rgb(153, 153, 153);
+    font-weight: bold;
+}
+div#form input#settings{
+    font-weight:bold;
+    width: 49%;
+    margin-top: 0.5em;
+    cursor: pointer;
+    border-color:#53565A;
+    background-color:#53565A;
+    color:#d9d9d9;
+}
+div#form input#show_history,
+div#form input#batch_dispatch,
+div#form input#batch_parse {
+    border: 1px solid #d9d9d9;
+    background-color: #d9d9d9;
+    color: #333333;
+    border-radius: 0.25em;
+    width: 49%;
+    margin-top: 0.5em;
+    cursor: pointer;
+}
+div#form input#show_history,
+div#form input#batch_dispatch.ready,
+div#form input#batch_parse.ready,
+div#form input#parse.ready{
+    color: #333333;
+    background-color: rgb(70, 147, 255);
+    border-color: rgb(70, 147, 255);
+}
+div#form input:not(:first-child){
+    margin-top: 0.5em;
+}
+div#content {
+    margin: 0 auto;
+    height: 57%;
+    max-width: 80%;
+    overflow: auto;
+    border-top: 3px solid #d9d9d9;
+    border-bottom: 3px solid #d9d9d9;
+    font-size: 2em;
+}
+div#content>div{
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+}
+div#content div.name {
+    text-align: center;
+    width: 90%;
+    /*font-family: "Consolas", monospace;*/
+}
+div#content div.parent,
+div#content div.folder{
+    padding: 0.25em;
+    cursor: pointer;
+    background-color: black;
+}
+div#content div.file{
+    background-color: black;
+    justify-content: space-between;
+}
+div#content div.folder:before{
+    position: absolute;
+    left: 0;
+    top: 0;
+    content: "\01F4C1";
+    padding: 0.25em;
+}
+div#content div.info,
+div#content div.dispatch {
+    padding: 0.25em;
+    text-align: center;
+    cursor: pointer;
+    width: 5%;
+}
+div#content>div>div{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+}
+div#content div div.info{
+    /*justify-content: flex-start;*/
+    /*opacity: 0;*/
+    /*pointer-events: none;*/
+}
+div#content div div.info div{
+    width: 1em;
+    height: 1em;
+    content: "i";
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    color: #d9d9d9;
+    background-color: transparent;
+    border-radius: 1em;
+    border: 1px solid #d9d9d9;
+}
+div#content div div.info.parsed div{
+    background-color: #d9d9d9;
+    color: black;
+}
+div#content >div:not(:first-child){
+    border-top: 1px solid #d9d9d9;
+}
+div#content_after{
+    font-size: 1em;
+    font-weight: bold;
+    text-align: center;
+    white-space: pre;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0.5em;
+    padding-bottom: 0;
+    z-index: -1;
+}
+div#dialog{
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    position: fixed;
+    pointer-events: none;
+}
+div#dialog > div.hide{
+    opacity: 0;
+    pointer-events: none;
+}
+div#dialog > div{
+    position: absolute;
+    background-color: rgba(0,0,0,0.8);
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    /*justify-content: center;*/
+    /*align-content: center;*/
+    transition: all 400ms;
+    pointer-events: all;
+    overflow: auto;
+    width: 100%;
+    height: 100%;
+}
+div#dialog > div > div{
+    width: calc(100% - 4em);
+    padding: 2em;
+    margin: auto;
+}
+div#dialog > div h3 {
+    text-align: center;
+    font-size: 2em;
+    width: 100%;
+    border-bottom: 3px solid #d9d9d9;
+    margin: 0 auto 1em auto;
+    padding: 0.5em 0;
+}
+div#dialog > div table {
+    margin: 0 auto;
+    width: 100%;
+}
+div#dialog > div table th {
+    font-size: 2em;
+    width: 1px;
+    white-space: nowrap;
+    color: #d9d9d9;
+}
+div#dialog > div table th,
+div#dialog > div table td{
+    padding: 0.25em;
+}
+div#dialog > div input{
+    width: 100%;
+}
+div#dialog > div input#link{
+    display: none;
+}
+div#dialog > div select{
+    width: 100%;
+    background-color: black;
+    color: #d9d9d9;
+    font-size: 2em;
+    border: 1px solid #d9d9d9;
+    border-radius: 0.25em;
+    padding: 0.25em;
+    text-align: center;
+    cursor: pointer;
+}
+div#dialog > div input[type="button"]{
+    color: #333333;
+    font-weight: bold;
+    background-color: rgb(70, 147, 255);
+    border-color: rgb(70, 147, 255);
+    cursor: pointer;
+}
+div#dialog >div input.close{
+    background-color: rgb(153, 153, 153);
+    border-color: rgb(153, 153, 153);
+}
+div#dialog > div input#submit{
+    background-color: rgb(70, 147, 255);
+    border-color: rgb(70, 147, 255);
+}
+div#help_dialog div.container {
+    font-size: 2em;
+}
+div#help_dialog div.container:before {
+    content: "\23EC";
+    margin-right: 0.5em;
+    vertical-align: top;
+    background-color: #0078d7;
+    content: "＋";
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 1em;
+    height: 1em;
+    margin-top: 0.4em;
+    border: 2px solid black;
+    font-weight: bold;
+    color: white;
+}
+div#help_dialog div.container.opened:before {
+    content: "\23EB";
+    content: "－";
+}
+div#help_dialog div.container div.container_content {
+    display: none;
+}
+div#help_dialog div.container.opened div.container_content {
+    display: block;
+    white-space: pre-wrap;
+    line-height: 1.5em;
+}
+div#help_dialog div.container.opened>div {
+    border-color: #d9d9d9;
+}
+div#help_dialog div.container>div {
+    width: calc(100% - 2.5em);
+    display: inline-block;
+    border: 1px solid transparent;
+    border-radius: 0.2em;
+    padding: 0.1em;
+    margin: 0.1em 0;
+}
+uinput {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: #d9d9d9;
+    margin: 0 0.2em;
+    display: inline-block;
+}
+element {
+    margin: 0 0.2em;
+    border: 1px solid #d9d9d9;
+    padding: 0 0.2em;
+    border-radius: 0.1em;
+    display: inline-block;
+}
+div#dialog div#dispatch_dialog fieldset>span{
+    font-weight: bold;
+    font-size: 2em;
+}
+div#dialog div#dispatch_dialog fieldset{
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    transform: translateX(-50%);
+    left: 50%;
+}
+div#dialog div#dispatch_dialog fieldset label input {
+    width: initial;
+}
+div#dialog div#dispatch_dialog fieldset label {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: 2em;
+}
+div#dialog div#dispatch_dialog fieldset label span{
+    font-size: 2em;
+    margin-left: 0.5em;
+}
+div#dialog input.close{
+    margin-top: 1em;
+}
+div#dialog div#dispatch_dialog h3 a{
+    color: #d9d9d9;
+    font-size: 0.75em;
+}
+div#dialog div#token_history_dialog table td{
+    font-size: 2em;
+    text-align: center;
+}
+div#dialog div#token_history_dialog div.controls{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+div#dialog div#token_history_dialog div.controls>h3{
+    padding-left: 1em;
+    padding-right: 1em;
+    margin-bottom: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+div#dialog div#token_history_dialog div.controls h3:not(:first-child){
+    margin-left: 1.5em;
+}
+div#dialog div#token_history_dialog table td{
+    font-size: 2em;
+    text-align: center;
+}
+div#dialog div#token_history_dialog div.controls{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+div#dialog div#token_history_dialog div.controls>h3{
+    padding-left: 1em;
+    padding-right: 1em;
+    margin-bottom: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+div#dialog div#token_history_dialog div.controls h3:not(:first-child){
+    margin-left: 1.5em;
+}
+div#dialog > div#token_history_dialog {
+    width: calc(100% - 4em);
+    height: calc(100% - 4em);
+    padding: 2em;
+}
+div#dialog div#token_history_dialog a{
+    color: #d9d9d9;
+    width: 47.5vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 auto;
+    display: block;
+}
+td.entry_date{
+    white-space: nowrap;
+}
+td.entry_code div{
+        width: 47.5vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 auto;
+}
+td.entry_pw{
+    cursor:pointer;
+}
+input#show_history{
+    color: #333333;
+    border-radius: 0.25em;
+    width: 49%;
+    margin-top: 0.5em;
+    cursor: pointer;
+    border-color: rgb(70, 147, 255);
+    background-color: rgb(70, 147, 255);
+}
+div._text{
+    max-width:80%;
+    top:15%;
+    left:50%;
+    transform:translateX(-50%);
+    border-radius:0.25em;
+    pointer-events:none;
+    position:absolute;
+    color:#333333;
+    background-color:#d9d9d9;
+    padding:0.25em 0.5em;
+    font-size:2em;
+}
+a:hover,
+div#content div.folder:hover,
+div#content div.parent:hover,
+div#content div.info:hover,
+div#content div.dispatch:hover{
+    background-color: rgba(255,255,255,0.25);
+}
+body.light uinput {
+    text-decoration-color: #333333;
+}
+body.light element {
+    border-color: #333333;
+}
+body.light div#help_dialog div.container.opened>div {
+    border-color: #333333;
+}
+body.light{
+    background-color: #d9d9d9;
+    color: #333333;
+}
+body.light input:not([type="radio"]) {
+    border-color: #333333;
+    color: #333333;
+    background-color: transparent;
+}
+body.light div#form input#batch_dispatch:not(.ready),
+body.light div#form input#batch_parse:not(.ready) {
+    border-color: #333333;
+    background-color: #d9d9d9;
+    color: #333333;
+}
+body.light div#form input#parse:not(.ready){
+    color: #d9d9d9;
+}
+body.light div#content:after {
+    border-color: #333333;
+}
+body.light div#content {
+    border-color: #333333;
+}
+body.light div#content div.parent,
+body.light div#content div.folder {
+    background-color: #d9d9d9;
+}
+body.light div#content div.file {
+    background-color: #d9d9d9;
+}
+body.light div#content >div:not(:first-child) {
+    border-color: #333333;
+}
+body.light div#content div div.info div {
+    color: #333333;
+    background-color: transparent;
+    border-color: #333333;
+}
+body.light div#content div div.info.parsed div {
+    background-color: #333333;
+    color: #d9d9d9;
+}
+body.light a:hover,
+body.light div#content div.folder:hover,
+body.light div#content div.parent:hover,
+body.light div#content div.info:hover,
+body.light div#content div.dispatch:hover {
+    background-color: rgba(0,0,0,0.1);
+}
+body.light div#dialog > div {
+    background-color: rgba(255,255,255,0.95);
+}
+body.light div#dialog > div select {
+    background-color: transparent;
+    color: #333333;
+    border-color: #333333;
+}
+body.light div#dialog div#dispatch_dialog h3 a{
+    color: #333333;
+}
+body.light div#dialog div#token_history_dialog a{
+    color: #333333;
+}
+body.light div#dialog > div h3 {
+    border-color: #333333;
+}
+body.light div#dialog > div table th {
+    color: #333333;
+}
+body.light div._text {
+    color:#d9d9d9;
+    background-color:#333333;
+}
+    </style>
+</head>
+<body>
+<h1>
+    <a href="/">在线解析 | 百度网盘</a>
+    <a id="report" href="#" target="_blank" class="shrink">[回报]</a>
+    <a href="https://afd.foxe6.cf" target="_blank" class="shrink">[联系]</a>
+<!--    <a href="https://www.kelongwo.com/Resource_function/pan/baidu/" target="_blank" class="shrink">[鸣谢]</a>-->
+</h1>
+<div id="form">
+    <input id="url" placeholder="https://pan.baidu.com/s/1...?pwd=.... (支持秒传链接)"/>
+    <div style="display: flex;justify-content: space-between;align-items: stretch;">
+<!--        <input style="margin-top: 0.5em;width: 18.5%; cursor: pointer;border-color:#f64a8a;background-color:#f64a8a;color:#1d1d1d;" type="button" value="回报错误" onclick="window.report()">-->
+        <input style="margin-top: 0.5em;width: 18.5%; cursor: pointer;border-color:rgb(70, 147, 255);background-color:rgb(70, 147, 255);color:#1d1d1d;" type="button" value="技术文档" id="helpcenter">
+        <input id="pw" placeholder="提取码 (支持自动填充)" maxlength="4" style="width: 60%;"/>
+        <input style="width: 18.5%; cursor: pointer;border-color:#f64a8a;background-color:#f64a8a;color:#1d1d1d;" type="button" value="清除缓存" onclick="clear_cache()">
+<!--        <input style="width: 18.5%; cursor: pointer;border-color:rgb(70, 147, 255);background-color:rgb(70, 147, 255);color:#1d1d1d;" type="button" value="解析历史" onclick="show_history()">-->
+    </div>
+    <div style="display: flex;justify-content: space-between;align-items: stretch;">
+        <input id="settings" type="button" value="配置" onclick="$('div#dispatch_dialog').removeClass('hide')">
+        <input id="parse" type="button" value="提交" style="width: 49%">
+    </div>
+    <div style="display: flex;justify-content: space-between;align-items: stretch;">
+<!--        <input id="batch_parse" type="button" value="批量解析">-->
+        <input id="show_history" type="button" value="解析历史" onclick="show_history()">
+        <input id="batch_dispatch" type="button" value="批量下载">
+    </div>
+</div>
+<div id="content"></div>
+<div id="content_after">
+    <span>在能力范围内</span>
+    <span>承诺永久免费</span>
+    <span>为防接口滥用</span>
+    <span>实施限流政策</span>
+    <span>为作者发电</span>
+    <span>维持网站</span>
+</div>
+<div id="dialog">
+    <div id="help_dialog" class="hide">
+        <div>
+            <h3>技术文档</h3>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）如何下载度盘链接？</div>
+                    <div class="container_content">Ａ）① 在<element>大方框</element>输入<uinput>分享链接</uinput>、<uinput>秒传链接</uinput>
+　　② 在<element>小方框</element>输入<uinput>提取码</uinput> (如有)
+　　③ 点<element>提交</element> (等待获取文件列表)
+　　④ 点<element>&#x27a2;</element> (开始解析和发送下载任务)</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）如何完成配置？</div>
+                    <div class="container_content">Ａ）① 点<element>配置</element>
+　　② 如果是 Motrix 用户，无需配置<uinput>RPC</uinput>
+　　③ 如果不是 Motrix，配置正确的<uinput>RPC</uinput>
+　　④ 点<element>保存</element>
+　　⑤ 点<element>关闭</element></div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）怎么解决「获取文件失败」？</div>
+                    <div class="container_content">Ａ）① 打开链接测试文件和提取码是否正确
+　　② 如果正确，点<uinput>F5</uinput>或者上方<element>刷新</element>重新加载页面
+　　③ 如果不正确，请联系分享来源重新分享链接
+　　④ 另外，可以点<element>[回报]</element>通知一下站长，也可以多试几次看看能解决不</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）怎么解决「解析失败」？</div>
+                    <div class="container_content">Ａ）① 打开链接测试文件和提取码是否正确
+　　② 如果正确，点<element>&#x27a2;</element><element>批量下载</element>重新解析
+　　③ 如果不正确，请联系分享来源重新分享链接
+　　④ 另外，可以点<element>[回报]</element>通知一下站长，也可以多试几次看看能解决不</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）怎么解决「发送失败」？</div>
+                    <div class="container_content">Ａ）① 确认是否已经启动 Motrix / aria2
+　　② 如果已启动，点<element>配置</element>确认<uinput>RPC</uinput>是否正确
+　　③ 如果未启动，请先启动 Motrix / aria2
+　　④ 另外，可以点<element>[联系]</element>找站长看看怎么解决</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）怎么解决「Motrix / aria2 下载失败」？</div>
+                    <div class="container_content">Ａ）① 下载时请不要关闭解析页面
+　　② 解析链接有效期为八小时，逾时请重新解析
+　　③ 请检查防火墙有没有拦截解析页面和下载软件
+　　④ 试试重新打开解析页面、然后重启下载软件
+　　⑤ mac 用户，点<element>配置</element>，在<element>文件储存路径</element>输入有效路径
+　　⑥ 另外，可以点<element>[联系]</element>找站长看看怎么解决</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）如何「重试下载」？</div>
+                    <div class="container_content">Ａ）① 点<element>解析历史</element>，<element>查看</element>文件信息，点<element>发送</element>
+　　② 方法二：
+　　③ Motrix 用戶，不要点<element>任务列表</element>里的<element>重试下载</element>，点<element>&#x27a2;</element><element>批量下载</element>重试
+　　④ aria2 用户，可以点<element>任务列表</element>里的<element>重试下载</element>
+　　⑤ 另外，可以点<element>[联系]</element>找站长看看怎么解决</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）怎么解决「操作频繁」？</div>
+                    <div class="container_content">Ａ）① 为防止滥用，目前解析接口有流量限制
+　　② 可以赞助作者成为 VIP 解除限制</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）可以使用「度盘 VIP 解析通道 token」？</div>
+                    <div class="container_content">Ａ）① 可以在网页旧版和解析软件里使用
+　　② 点<element>配置</element>，在<element>token 方框</element>输入<uinput>token</uinput>
+　　③ 点<element>保存</element>
+　　④ 点<element>关闭</element></div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）关于「秒传链接」解析失败的问题</div>
+                    <div class="container_content">Ａ）解析原理复杂，功能只是试验性质，不保证百分百能解析，看缘分吧</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）mac 版本「菜单」不见了</div>
+                    <div class="container_content">Ａ）mac 的菜单在桌面左上方，点<element>打开工具箱</element>就可以了</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）重试多次还是解析/下载失败</div>
+                    <div class="container_content">Ａ）① 点<element>清除缓存</element>后解析试试吧
+　　② 还是不能解决的，点<element>[联系]</element>找站长看看怎么解决</div>
+                </div>
+            </div>
+            <div class="container">
+                <div>
+                    <div class="container_title">Ｑ）其他问题</div>
+                    <div class="container_content">Ａ）点<element>[联系]</element>找找站长</div>
+                </div>
+            </div>
+            <input type="button" value="关闭" class="close"/>
+        </div>
+    </div>
+    <div id="token_history_dialog" class="hide">
+        <h3>解析历史 (共 <span></span> 条)</h3>
+        <table class="history"></table>
+        <div class="controls">
+            <h3 id="newest">最新</h3>
+            <h3 id="prev">上页</h3>
+            <h3 id="which_page"><span id="current_page">0</span> / <span id="total_pages"></span></h3>
+            <h3 id="next">下页</h3>
+            <h3 id="oldest">最旧</h3>
+        </div>
+        <input type="button" value="关闭" class="close">
+    </div>
+    <div id="file_dialog" class="hide">
+        <div>
+            <h3>文件信息</h3>
+            <table>
+                <tr><th>名称</th><td><input id="name" /></td></tr>
+                <tr><th>链接</th><td><select id="link"></select><input id="link" readonly/></td></tr>
+                <tr><th>路径</th><td><input id="path" /></td></tr>
+                <tr style="display: none"><th>User Agent</th><td><input id="ua" readonly/></td></tr>
+                <tr><th>大小</th><td><input id="size" readonly/></td></tr>
+                <tr><th>MD5</th><td><input id="md5" readonly/></td></tr>
+            </table>
+            <input style="margin-top: 1em;" type="button" value="发送" id="submit"/>
+            <input style="margin-top: 1em;" type="button" value="拷贝信息" onclick="copy_detail()"/>
+            <input type="button" value="关闭" class="close"/>
+        </div>
+    </div>
+    <div id="dispatch_dialog" class="hide">
+        <div>
+            <h3>界面模式</h3>
+            <fieldset id="theme">
+                <span>颜色主题</span>
+                <label><input name="theme" value="light" type="radio"/><span>光亮</span></label>
+                <label><input name="theme" value="dark" type="radio" checked="checked"/><span>暗黑</span></label>
+            </fieldset>
+            <h3>aria2 / Motrix <a href="https://motrix.app/zh-CN/">[点此下载]</a></h3>
+            <table>
+                <tr><th>文件储存路径</th><td><input id="save_path" placeholder="(mac 需要配置) /home/user/Downloads"/></td></tr>
+            </table>
+            <div style="width: 95%; margin: 0 auto">
+                <h3>RPC （Motrix 无需配置）</h3>
+                <table>
+                    <tr>
+                        <th>域名</th><td colspan="3"><input id="domain" placeholder="127.0.0.1"/></td>
+                    </tr>
+                    <tr>
+                        <th>协议</th><td><select id="protocol">
+                        <option value="GET">HTTP GET</option>
+                        <option value="POST">HTTP POST</option>
+                        <option value="WS" selected>WS</option>
+                        <option value="SGET">HTTPS GET</option>
+                        <option value="SPOST">HTTPS POST</option>
+                        <option value="WSS">WSS</option>
+                    </select></td>
+                        <th>端口</th><td><input id="port" placeholder="16800"/></td>
+                    </tr>
+                    <tr>
+                        <th>路径</th><td><input id="path2" placeholder="jsonrpc"/></td>
+                        <th>密钥</th><td><input id="secret" placeholder="SECRET" type="password"/></td>
+                    </tr>
+                </table>
+            </div>
+            <h3>VIP 解析通道 (旧版10,100次可以使用)</h3>
+<!--             <a href="https://afdian.net/a/foxe6?tab=shop" target="_blank">[点此购买]</a>-->
+            <table>
+                <tr>
+                    <th>token</th>
+                    <td><input id="token" placeholder="token（64位字母数字）" maxlength="64" value="du-pan-zai-xian-jie-xi-pc-duan-nei-ce-ban-ben-20230124-1919-v0.2" /></td>
+                    <td style="width: 150px"><input readonly id="token_ct" placeholder="解析次数"></td>
+                </tr>
+            </table>
+            <input type="button" value="保存" id="save" style="margin-top: 1em;"/>
+            <input type="button" value="关闭" class="close"/>
+        </div>
+    </div>
+</div>
+<script>
+let ru_parser=function(what){
+    function decryptMd5(md5) {
+      if (
+        !(
+          (parseInt(md5[9]) >= 0 && parseInt(md5[9]) <= 9) ||
+          (md5[9] >= "a" && md5[9] <= "f")
+        )
+      )
+        return decrypt(md5);
+      else return md5;
+
+      function decrypt(encryptMd5) {
+        let key = (encryptMd5[9].charCodeAt(0) - "g".charCodeAt(0)).toString(16);
+        let key2 = encryptMd5.slice(0, 9) + key + encryptMd5.slice(10);
+        let key3 = "";
+        for (let a = 0; a < key2.length; a++)
+          key3 += (parseInt(key2[a], 16) ^ (15 & a)).toString(16);
+        let md5 =
+          key3.slice(8, 16) +
+          key3.slice(0, 8) +
+          key3.slice(24, 32) +
+          key3.slice(16, 24);
+        return md5;
+      }
+    }
+    class DuParser {
+      constructor() {}
+      static parse(szUrl) {
+        let r;
+        if (szUrl.indexOf("bdpan") === 0) {
+          r = DuParser.parseDu_v1(szUrl);
+          r.ver = "PanDL";
+        } else if (szUrl.indexOf("BaiduPCS-Go") === 0) {
+          r = DuParser.parseDu_v2(szUrl);
+          r.ver = "PCS-Go";
+        } else if (szUrl.indexOf("BDLINK") === 0) {
+          r = DuParser.parseDu_v3(szUrl);
+          r.ver = "游侠 v1";
+        } else {
+          r = DuParser.parseDu_v4(szUrl);
+          r.ver = "梦姬标准";
+        }
+        return r;
+      }
+      static parseDu_v1(szUrl) {
+        return szUrl
+          .replace(/\s*bdpan:\/\//gu, " ")
+          .trim()
+          .split(" ")
+          .map((z) =>
+            z
+              .trim()
+              .fromBase64()
+              .match(/([\s\S]+)\|([\d]{1,20})\|([\dA-Fa-f]{32})\|([\dA-Fa-f]{32})/u)
+          )
+          .filter((z) => z)
+          .map((info) => ({
+            md5: info[3],
+            md5s: info[4],
+            size: info[2],
+            path: info[1],
+          }));
+      }
+      static parseDu_v2(szUrl) {
+        return szUrl
+          .split("\n")
+          .map((z) =>
+            z
+              .trim()
+              .match(
+                /-length=([\d]{1,20}) -md5=([\dA-Fa-f]{32}) -slicemd5=([\dA-Fa-f]{32})[\s\S]+"([\s\S]+)"/u
+              )
+          )
+          .filter((z) => z)
+          .map((info) => ({
+            md5: info[2],
+            md5s: info[3],
+            size: info[1],
+            path: info[4],
+          }));
+      }
+      static parseDu_v3(szUrl) {
+        const raw = atob(szUrl.slice(6).replace(/\s/gu, ""));
+        if (raw.slice(0, 5) !== "BDFS\x00") return null;
+
+        const buf = new SimpleBuffer(raw);
+        let ptr = 9;
+        const arrFiles = [];
+        let fileInfo, nameSize;
+        const total = buf.readUInt(5);
+        let i;
+        for (i = 0; i < total; i++) {
+          /*
+           * 大小 (8 bytes)
+           * MD5 + MD5S (0x20)
+           * nameSize (4 bytes)
+           * Name (unicode)
+           */
+          fileInfo = {};
+          fileInfo.size = buf.readULong(ptr + 0);
+          fileInfo.md5 = buf.readHex(ptr + 8, 0x10);
+          fileInfo.md5s = buf.readHex(ptr + 0x18, 0x10);
+          nameSize = buf.readUInt(ptr + 0x28) << 1;
+          fileInfo.nameSize = nameSize;
+          ptr += 0x2c;
+          fileInfo.path = buf.readUnicode(ptr, nameSize);
+          arrFiles.push(fileInfo);
+          ptr += nameSize;
+        }
+        return arrFiles;
+      }
+      static parseDu_v4(szUrl) {
+        return szUrl
+          .split("\n")
+          .map(function (z) {
+            return z
+              .trim()
+              .match(
+                /^([\da-f]{9}[\da-z][\da-f]{22})#(?:([\da-f]{32})#)?([\d]{1,20})#([\s\S]+)/iu
+              ); // 22.8.29新增支持第10位为g-z的加密md5, 输入后自动解密转存
+          })
+          .filter(function (z) {
+            return z;
+          })
+          .map(function (info) {
+            return {
+              // 标准码 / 短版标准码(无md5s)
+              md5: decryptMd5(info[1].toLowerCase()),
+              md5s: info[2] || "",
+              size: info[3],
+              path: info[4],
+            };
+          });
+      }
+    }
+    class SimpleBuffer {
+      constructor(str) {
+        this.fromString(str);
+      }
+      static toStdHex(n) {
+        return `0${n.toString(16)}`.slice(-2);
+      }
+      fromString(str) {
+        const len = str.length;
+        this.buf = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          this.buf[i] = str.charCodeAt(i);
+        }
+      }
+      readUnicode(index, size) {
+        if (size & 1) size++;
+
+        const bufText = Array.prototype.slice
+          .call(this.buf, index, index + size)
+          .map(SimpleBuffer.toStdHex);
+        const buf = [""];
+        for (let i = 0; i < size; i += 2) {
+          buf.push(bufText[i + 1] + bufText[i]);
+        }
+        return JSON.parse(`"${buf.join("\\u")}"`);
+      }
+      readNumber(index, size) {
+        let ret = 0;
+        for (let i = index + size; i > index; ) {
+          ret = this.buf[--i] + ret * 256;
+        }
+        return ret;
+      }
+      readUInt(index) {
+        return this.readNumber(index, 4);
+      }
+      readULong(index) {
+        return this.readNumber(index, 8);
+      }
+      readHex(index, size) {
+        return Array.prototype.slice
+          .call(this.buf, index, index + size)
+          .map(SimpleBuffer.toStdHex)
+          .join("");
+      }
+    }
+    return DuParser.parse(what);
+}
+function clear_cache(c){
+    if(!c){
+        c = confirm("确定清除缓存？");
+    }
+    if(c){
+        let aria2_config = window.localStorage2["aria2_config"];
+        try {
+            window.localStorage2.clear();
+        }catch (e) {
+            for(let k of Object.keys(window.localStorage2)){
+                delete window.localStorage2[k];
+            }
+        }
+        aria2_config&&(window.localStorage2["aria2_config"] = aria2_config);
+        $("div#content").empty();
+        show_text(popup_text("已清除缓存"), 1500);
+    }
+}
+let token_history = [];
+let token_history_page = 0;
+let token_history_perpage = 5;
+function show_entry(){
+    let html = "<tr><th>日期</th><th>文件代码</th><th>文件信息</th></tr>";
+    let entries = token_history.slice(token_history_perpage*token_history_page, token_history_perpage*(token_history_page+1));
+    let iii = token_history_page*token_history_perpage;
+    for(let [date, code, pw] of entries){
+        let date2 = new Date(date*1000);
+        date2 = date2.getFullYear() + "-" +
+            ("0" + (date2.getMonth() + 1)).slice(-2) + "-" +
+            ("0" + date2.getDate()).slice(-2) + "<br/>" +
+            ("0" + date2.getHours() ).slice(-2) + ":" +
+            ("0" + date2.getMinutes()).slice(-2) + ":" +
+            ("0" + date2.getSeconds()).slice(-2);
+        html += "<tr><td class='entry_date'>"+date2+"</td><td class='entry_code'>" +
+            (code.length===32?"<a>"+code+"</a>":"<a href='https://pan.baidu.com/s/1"+code+"#list/path="+pw["path"]+"' target='_blank'>"+code+"</a>") +
+            "<div>"+([pw["path"], pw["name"]]).join("/")+"</div>" +
+            "</td>" +
+            (
+                (new Date).getTime()/1000-date>3600*8-60?"<td>信息过期</td></tr>":"<td class='entry_pw' data-i='"+iii+"'><u>查看</u></td></tr>"
+            );
+        iii += 1;
+    }
+    for(let i=0;i<(token_history_perpage-entries.length)*2;i++){
+        html += "<tr><td class='entry_date'>&nbsp;</td><td class='entry_code'>&nbsp;</td><td class='entry_pw'>&nbsp;</td></tr>";
+    }
+    history_section.innerHTML = html;
+    token_history_dialog.querySelector("h3 span#current_page").innerText = token_history_page+1;
+    $(history_section).find("td.entry_pw").on("click", function(){
+        let iii = $(this).data("i");
+        let v = token_history[iii][2];
+        $("div#file_dialog input#name").val(v["name"]);
+        $("div#file_dialog input#md5").val(v["md5"]);
+        $("div#file_dialog input#path").val(v["path"]);
+        $("div#file_dialog input#size").val(v["size"]);
+        window.get_suitable_ua(v["urls"][0].split("://").pop(), function(ua){
+            $("div#file_dialog input#ua").val(ua).closest("tr").show();
+        });
+        $("div#file_dialog select#link").html(v["urls"].slice(0, 1).map(function(e){
+            return "<option>"+e+"</option>";
+        }).join(""));
+        $("div#file_dialog").removeClass("hide");
+    });
+}
+let token_history_dialog = document.querySelector("div#token_history_dialog");
+let history_section = token_history_dialog.querySelector("table.history");
+function show_history(){
+    token_history = [];
+    let tmp = [];
+    let dirs = [];
+    for(let k in window.localStorage2){
+        let v = JSON.parse(window.localStorage2[k]);
+        if(!isNaN(Number(k))) {
+            tmp.push([k].concat(v));
+        }
+        else if(k.indexOf("/")!==-1){
+            dirs.push([k].concat(v));
+        }
+        else if(k.length===32){
+            tmp.push([k].concat(v));
+            dirs.push([k, null, {"data":{"list":[{
+                "fs_id": k,
+                "md5": k,
+                "path":  ([v[1]["path"], v[1]["name"]]).join("/"),
+                "size": v[1]["size"],
+            }]}}]);
+        }
+    }
+    for(let v of tmp){
+        let found = 0;
+        for(let dir of dirs){
+            for(let li of dir[2]["data"]["list"]){
+                if(li["fs_id"]==v[0]){
+                    found = 1;
+                    let t = li["path"].split(/\//g);
+                    li["name"] = t.pop();
+                    li["path"] = t.join("/");
+                    li = {
+                        "md5": li["md5"],
+                        "path": li["path"],
+                        "name": li["name"],
+                        "size": li["size"],
+                        "urls": v[2]["urls"],
+                    }
+
+                    token_history.push([
+                        v[1],
+                        dir[0].split(/\//g)[0],
+                        li
+                    ]);
+                    break;
+                }
+            }
+            if(found){
+                break;
+            }
+        }
+    }
+    token_history = token_history.sort(function(a, b){
+        return b[0]-a[0];
+    });
+    token_history_page = 0;
+    token_history_dialog.classList.remove("hide");
+    token_history_dialog.querySelector("h3 span").innerText = token_history.length;
+    token_history_dialog.querySelector("h3 span#total_pages").innerText = Math.ceil(token_history.length/token_history_perpage);
+    history_section.innerHTML = "";
+    show_entry();
+}
+document.querySelector("h3#newest").addEventListener("click", function () {
+    token_history_page = 0;
+    show_entry();
+});
+document.querySelector("h3#oldest").addEventListener("click", function () {
+    token_history_page = Math.ceil(token_history.length/token_history_perpage)-1;
+    show_entry();
+});
+document.querySelector("h3#prev").addEventListener("click", function () {
+    if(token_history_page-1>=0){
+        token_history_page--;
+        show_entry();
+    }
+});
+document.querySelector("h3#next").addEventListener("click", function () {
+    if(token_history_page+1<Math.ceil(token_history.length/token_history_perpage)){
+        token_history_page++;
+        show_entry();
+    }
+});
+document.querySelector("h3#which_page").addEventListener("click", function () {
+    // let page = parseInt(prompt("请输入页数："))-1;
+    // if(page>=0&&page<Math.ceil(token_history.length/token_history_perpage)){
+    //     token_history_page=page;
+    //     show_entry();
+    // }
+});
+function copy_detail(){
+    let d={};
+    $("div#file_dialog tr:visible").get().map(function(e){
+        e=$(e).find("input, select")
+        d[e.attr("id")] = e.val();
+    });
+    d=JSON.stringify(d, null, 4);
+    let inp =document.createElement('textarea');
+    document.body.appendChild(inp);
+    inp.value = d;
+    inp.select();
+    document.execCommand('copy');
+    inp.remove();
+}
+function popup_text(w){
+    return "<div class='_text'>"+w+"</div>";
+}
+function show_text(w, to){
+    to = to||3000;
+    $("body div._text").hide();
+    w = $(w);
+    $("body").append(w);
+    // w.css({"top": "15%", "left": "50%", "transform": "translateX(-50%)"});
+    setTimeout(function(){w.fadeOut(function(){w.remove();});}, to);
+    return w;
+}
+function h_size(size) {
+    let i = size === 0 ? 0 : Math.floor( Math.log(size) / Math.log(1024) );
+    return ( size / Math.pow(1024, i) ).toFixed(2) * 1 + " " + ["B", "KiB", "MiB", "GiB", "TiB"][i];
+}
+$(document).ready(function(){
+    let token = "";
+    let token_ct = 0;
+    window.token_ct = function (){
+        token&&$.post("https://"+window.location.host+"/api?token_ct"+token, function (r) {
+            token_ct = r;
+            $("div#dispatch_dialog input#token_ct").val(r);
+            // console.log(r);
+        }).fail(function(r){
+            ;
+        });
+    }
+    $("a#report").on("click", function (e){
+        e.preventDefault();
+        // let desc = prompt("请描述错误（100字内）：")||"";
+        // desc = desc.slice(0, 100);
+        let desc = [$("input#pw").val(), $("input#url").val(), JSON.parse(window.localStorage2["aria2_config"]||"[]")];
+        if(desc.length){
+            console.log(JSON.stringify(desc))
+            $.post("https://"+window.location.host+"/api?report"+token, JSON.stringify(desc), function(r){
+                // alert("已记录回报，感谢");
+                show_text(popup_text("已记录回报，感谢"), 1500);
+            }).fail(function(r){
+                if(r.status===429){
+                    show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                    return;
+                }
+                console.log(r)
+                // alert("发生错误，未能记录回报");
+                show_text(popup_text("发生错误，未能记录回报"), 10000);
+            });
+        }
+        // else{
+        //     // alert("发生错误，未能记录回报");
+        //     show_text(popup_text("发生错误，未能记录回报"), 10000);
+        // }
+    });
+    var hasTouchScreen = false;
+    if ("maxTouchPoints" in navigator) {
+        hasTouchScreen = navigator.maxTouchPoints > 0;
+    } else if ("msMaxTouchPoints" in navigator) {
+        hasTouchScreen = navigator.msMaxTouchPoints > 0;
+    } else {
+        var mQ = window.matchMedia && matchMedia("(pointer:coarse)");
+        if (mQ && mQ.media === "(pointer:coarse)") {
+            hasTouchScreen = !!mQ.matches;
+        } else if ('orientation' in window) {
+            hasTouchScreen = true;
+        } else {
+            var UA = navigator.userAgent;
+            hasTouchScreen = (
+                /\b(BlackBerry|webOS|iPhone|IEMobile)\b/i.test(UA) ||
+                /\b(Android|Windows Phone|iPad|iPod)\b/i.test(UA)
+            );
+        }
+    }
+    let is_mobile = hasTouchScreen;
+    let update_input = function(path){
+        $("input#pw").val("");
+        let m = path.match(/\/s\/1([a-zA-Z0-9\-\_]{22})(?:\?pwd=([a-zA-Z0-9]{4}))?$/);
+        if(!m){
+            m = path.match(/\/share\/init\?surl=([a-zA-Z0-9\-\_]{22})(?:&pwd=([a-zA-Z0-9]{4}))?$/);
+            if(!m){
+                return;
+            }
+        }
+        let code = m[1];
+        let pw = m[2];
+        $("input#url").val("https://pan.baidu.com/s/1"+code+(pw?"?pwd="+pw:""));
+        pw&&$("input#pw").val(pw);
+        return [code, pw];
+    }
+    let ru_gen_files = function(url){
+        let htmls="";
+        let template = [
+            "",
+            "<div class='dispatch'>&#x27A2;</div></div>"
+        ];
+        let parsed=ru_parser(url);
+        for(let item of parsed){
+            item["fs_id"] = item["md5"];
+            let t = item["path"].split(/\//g);
+            item["server_filename"] = item["name"] = t.pop();
+            item["path"] = t.join("/");
+            let data="";
+            for(let k of [
+                "fs_id",
+                "md5",
+                "size",
+                "path",
+                "name"
+            ]){
+                data += " data-"+k+"='"+$("<p/>").text(item[k]).html()+"'";
+            }
+            // htmls += template[0]+"<div class='file'><div class='info"+(item["fs_id"] in window.localStorage2?" parsed":"")+"'"+data+"><div>i</div></div><div class='name'><div style='word-break: break-all'><span style='word-break:keep-all;margin-right: 0.25em'>["+h_size(item["size"])+"]</span>"+item["server_filename"]+"</div></div>"+template[1];
+            htmls += template[0]+"<div class='file'><div class='info"+(item["fs_id"] in window.localStorage2?" parsed":"")+"'"+data+">&#x01F504;</div><div class='name'><div style='word-break: break-all'><span style='word-break:keep-all;margin-right: 0.25em'>["+h_size(item["size"])+"]</span>"+item["server_filename"]+"</div></div>"+template[1];
+        }
+        $("div#content").empty().append(htmls);
+        function _parse(dispatch){
+            show_text(popup_text("解析中，请稍候"), 20*1000);
+            let data = [$(this).data("md5"), $(this).data("size"), $(this).data("path"), $(this).data("name")];
+            let _this = $(this);
+            function next2(r){
+                _this.addClass("parsed");
+                show_text(popup_text("已解析"), 1500);
+                $("div#file_dialog input#ua").val(r["ua"]||"").closest("tr").hide();
+                $("div#file_dialog input#path").val(data[2]);
+                $("div#file_dialog input#name").val(data[3]);
+                $("div#file_dialog input#size").val(data[1]);
+                $("div#file_dialog input#md5").val(data[0]);
+                $("div#file_dialog input#link").val(r["url"]);
+                if(r["urls"]){
+                    let options = "";
+                    for(let url of r["urls"]){
+                        options += "<option>"+url+"</option>";
+                    }
+                    $("div#file_dialog select").empty().append(options);
+                }
+                $("div#dialog>div").addClass("hide");
+                if(dispatch===1){
+                    $("div#file_dialog input#submit").trigger("click");
+                }
+                else if(dispatch===0){
+                    $("div#file_dialog").removeClass("hide");
+                }
+            }
+            let fs_id = $(this).data("fs_id");
+            if(dispatch===1 && (fs_id in window.localStorage2) && (new Date().getTime()/1000)-JSON.parse(window.localStorage2[fs_id])[0]<28800){
+                next2(JSON.parse(window.localStorage2[fs_id])[1]);
+            }
+            else{
+                function temp_get(token){
+                    $.post("https://"+window.location.host+"/api?get_file"+token, JSON.stringify(data.concat(1)), function (r) {
+                        r["path"] = data[2];
+                        r["name"] = data[3];
+                        r["size"] = data[1];
+                        try{
+                            window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                        }catch(e){
+                            clear_cache(1);
+                            window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                        }
+                        token&&window.token_ct();
+                        next2(r);
+                    }).fail(function(r){
+                        if(r.status===401){
+                            show_text(popup_text("VIP 解析次数耗尽，普通重试中"), 10000);
+                            temp_get("");
+                            return;
+                        }
+                        if(r.status===422){
+                            show_text(popup_text("不支持解析该秒传链接<br/>链接可能有禁止分享的内容"), 10000);
+                            return;
+                        }
+                        if(r.status===500){
+                            show_text(popup_text("解析脚本错误<br/>秒传链接可能有问题"), 10000);
+                            return;
+                        }
+                        if(r.status===429){
+                            show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                            return;
+                        }
+                        console.log(r);
+                        show_text(popup_text("解析失败，请重试"), 10*1000);
+                        // $.post("https://"+window.location.host+"/api?query"+token, function(r){
+                        //     let s = $("<div>"+r+"</div>").find("h2 a:not([href])").text();
+                        //     show_text(popup_text("解析失败，实时自动检测："+s), 10000);
+                        // }).fail(function (r) {
+                        //     ;
+                        // });
+                    });
+                }
+                temp_get(token);
+            }
+        }
+        $("div#content").find("div[data-path]").on("click", function () {
+            _parse.call(this, 0);
+        }).on(is_mobile?"touchstart":"mouseenter", function () {
+            // show_text(popup_text($(this).hasClass("parsed")?"已解析，可以下载":"解析下载链接"), 1500);
+            show_text(popup_text("重新解析"), 1500);
+        });
+        $("div#content").find("div.dispatch").on("click", function () {
+            _parse.call($(this).prev().prev().get(0), 1);
+        }).on(is_mobile?"touchstart":"mouseenter", function () {
+            show_text(popup_text("发送下载任务"), 1500);
+        });
+        // if(parsed.length===1){
+        //     $("div#content").find("div[data-path]").each(function(){
+        //         _parse.call(this, -1);
+        //     });
+        // }
+    }
+    let input_url_keyup = function(e){
+        if("abcdefghijklmnopqrstuvwxyz:/?&=-_%".indexOf(e.key)===-1){
+            return;
+        }
+        $("input#parse, input#batch_dispatch, input#batch_parse").removeClass("ready");
+        let url = $("input#url").val();
+        if(ru_parser(url).length){
+            $("input#parse").addClass("ready").trigger("click");
+            return;
+        }
+        let pw2 = $("input#pw").val();
+        if(url.indexOf("pwd=")===-1&&pw2){
+            if(url.indexOf("?")!==-1){
+                url += "&pwd="+pw2;
+            }
+            else{
+                url += "?pwd="+pw2;
+            }
+        }
+        if(update_input(url)){
+            $("input#parse").addClass("ready");
+            // $("input#batch_dispatch, input#batch_parse").addClass("ready");
+            if(window.location.pathname.slice(1)||window.location.search){
+                $("input#parse").trigger("click");
+            }
+        }
+    }
+    $("input#url").on("keyup", input_url_keyup);
+    let batch_parse = function(dispatch) {
+        let url = $("input#url").val();
+        if(ru_parser(url).length){
+
+            return;
+        }
+        let pw2 = $("input#pw").val();
+        if(url.indexOf("pwd=")===-1&&pw2){
+            if(url.indexOf("?")!==-1){
+                url += "&pwd="+pw2;
+            }
+            else{
+                url += "?pwd="+pw2;
+            }
+        }
+        let [code, pw] = update_input(url);
+        let path = decodeURIComponent(window.location.hash.slice(1));
+        let paths = [path||""];
+        let get_content = function(){
+            let path = paths.shift();
+            if(path===undefined){
+                show_text(popup_text("已批量"+(dispatch?"发送":"解析")), 1500);
+                return;
+            }
+            show_text(popup_text("获取文件中："+path), 10*1000);
+            let next = function(r) {
+                show_text(popup_text("已获取文件："+path), 1500);
+                let _list = r["data"]["list"];
+                let randsk = r["data"]["seckey"];
+                let share_id = r["data"]["shareid"];
+                let uk = r["data"]["uk"];
+                let loop_list = function(){
+                    let item = _list.shift();
+                    if(item===undefined){
+                        get_content();
+                        return;
+                    }
+                    if(item["isdir"]==1){
+                        paths.push(item["path"]);
+                        loop_list();
+                    }
+                    else{
+                        show_text(popup_text("解析中："+item["path"]), 10*1000);
+                        let next2 = function(r){
+                            $("div[data-fs_id='"+fs_id+"']").addClass("parsed");
+                            show_text(popup_text("已解析 "+item["path"]), 1500);
+                            if(!dispatch) {
+                                loop_list();
+                            }
+                            else{
+                                let data = [item["path"].split("/").slice(0,-1).join("/"), item["server_filename"], item["size"], item["md5"]];
+                                $("div#file_dialog input#ua").val(r["ua"]||"").closest("tr").hide();
+                                $("div#file_dialog input#path").val(data[0]);
+                                $("div#file_dialog input#name").val(data[1]);
+                                $("div#file_dialog input#size").val(data[2]);
+                                $("div#file_dialog input#md5").val(data[3]);
+                                $("div#file_dialog input#link").val(r["url"]);
+                                if(r["urls"]){
+                                    let options = "";
+                                    for(let url of r["urls"]){
+                                        options += "<option>"+url+"</option>";
+                                        window.get_suitable_ua(url.split("://").pop());
+                                    }
+                                    $("div#file_dialog select").empty().append(options);
+                                }
+                                do_dispatch(function(error){
+                                    loop_list();
+                                });
+                            }
+                        }
+                        let fs_id = item["fs_id"];
+                        if(dispatch===1 && (fs_id in window.localStorage2) && (new Date().getTime()/1000)-JSON.parse(window.localStorage2[fs_id])[0]<28800){
+                            next2(JSON.parse(window.localStorage2[fs_id])[1]);
+                        }
+                        else{
+                            let temp_get = function(token){
+                                $.post("https://"+window.location.host+"/api?get_file"+token, JSON.stringify([code, randsk, share_id, uk, fs_id, 1]), function (r) {
+                                    try{
+                                        window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                                    }catch(e){
+                                        clear_cache(1);
+                                        window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                                    }
+                                    token&&window.token_ct();
+                                    next2(r);
+                                }).fail(function(r){
+                                    if(r.status===401){
+                                        show_text(popup_text("VIP 解析次数耗尽，普通重试中"), 10000);
+                                        temp_get("");
+                                        return;
+                                    }
+                                    if(r.status===429){
+                                        show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                                        return;
+                                    }
+                                    console.log(r);
+                                    // show_text(popup_text("解析失败，请重试"), 10000);
+                                    show_text(popup_text("解析失败，重试中"), 10000);
+                                    temp_get(token);
+                                    // $.post("https://"+window.location.host+"/api?query"+token, function(r){
+                                    //     let s = $("<div>"+r+"</div>").find("h2 a:not([href])").text();
+                                    //     show_text(popup_text("解析失败，实时自动检测："+s), 10000);
+                                    // }).fail(function (r) {
+                                    //     ;
+                                    // });
+                                });
+                            }
+                            temp_get(token);
+                        }
+                    }
+                }
+                loop_list();
+            }
+            if(code+"/"+path in window.localStorage2 && (new Date().getTime()/1000)-JSON.parse(window.localStorage2[code+"/"+path])[0]<28800){
+                next(JSON.parse(window.localStorage2[code+"/"+path])[1]);
+            }
+            else {
+                $.post(
+    "https://pan.baidu.com/share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1",
+    {
+        "shorturl": "1"+code,
+        "dir": path,
+        "root": path?"0":"1",
+        "pwd": pw,
+        "page": "1",
+        "num": "9999",
+        "order": "time",
+    }, function (r) {
+                    if(r["errno"]!=0){
+                        console.log(r);
+                        let msg = {
+                            "mis_105": "你所解析的文件不存在~",
+                            "mispw_9": "提取码错误",
+                            "mispwd-9": "提取码错误",
+                            "mis_2": "不存在此目录",
+                            3: "此链接分享内容可能因为涉及侵权、色情、反动、低俗等信息，无法访问！",
+                            0: "啊哦，你来晚了，分享的文件已经被删除了，下次要早点哟。",
+                            10: "啊哦，来晚了，该分享文件已过期"
+                        };
+                        msg = msg[r["errtype"]];
+                        if(!msg){
+                            show_text(popup_text("获取文件失败：自动重试中"), 10000);
+                            $("input#parse").trigger("click");
+                            return;
+                        }
+                        show_text(popup_text("获取文件失败："+msg), 10000);
+                        return;
+                    }
+                    try{
+                        window.localStorage2[code+"/"+path] = JSON.stringify([new Date().getTime()/1000, r]);
+                    }catch(e){
+                        clear_cache(1);
+                        window.localStorage2[code+"/"+path] = JSON.stringify([new Date().getTime()/1000, r]);
+                    }
+                    next(r);
+                }).fail(function(r){
+                    if(r.status===429){
+                        show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                        return;
+                    }
+                    console.log(r)
+                    // alert(r.responseText);
+                    show_text(popup_text("获取文件失败："+r.responseText.replace(/\n/g, "<br/>")), 10000);
+                });
+            }
+        }
+        get_content();
+    }
+    $("input#batch_parse").on("click", function () {
+        if(!("aria2_config" in window.localStorage2)){
+            show_text(popup_text("请先完成配置"), 10000);
+            return;
+        }
+        if(!token_ct){
+            show_text(popup_text("软件需要有效的 token 才能运作<br/>请在配置里更改"), 10000);
+            return;
+        }
+        if(!$(this).hasClass("ready")){
+            return;
+        }
+        batch_parse();
+    });
+    $("input#batch_dispatch").on("click", function () {
+        if(!("aria2_config" in window.localStorage2)){
+            show_text(popup_text("请先完成配置"), 10000);
+            return;
+        }
+        if(!token_ct){
+            show_text(popup_text("软件需要有效的 token 才能运作<br/>请在配置里更改"), 10000);
+            return;
+        }
+        if(!$(this).hasClass("ready")){
+            return;
+        }
+        batch_parse(1);
+    });
+    let prev_code;
+    $("input#parse").on("click", function(e){
+        if(!token_ct){
+            show_text(popup_text("软件需要有效的 token 才能运作<br/>请在配置里更改"), 10000);
+            return;
+        }
+        let hash;
+        if(!e.originalEvent){
+            hash = decodeURIComponent(window.location.hash.slice(1));
+        }
+        let url = $("input#url").val();
+        if(ru_parser(url).length){
+            ru_gen_files(url);
+            return;
+        }
+        let pw2 = $("input#pw").val();
+        if(url.indexOf("pwd=")===-1&&pw2){
+            if(url.indexOf("?")!==-1){
+                url += "&pwd="+pw2;
+            }
+            else{
+                url += "?pwd="+pw2;
+            }
+        }
+        let [code, pw] = update_input(url);
+        if(prev_code&&prev_code!==code){
+            hash=null;
+        }
+        prev_code=code;
+        show_text(popup_text("获取文件中，请稍候"), 10*1000);
+        !hash&&window.history.pushState("","","/s/1"+code+(pw?"?pwd="+pw:""));
+        let get_content = function(path){
+            path&&window.history.pushState("","","/s/1"+code+(pw?"?pwd="+pw:"")+(path?"#"+path:""));
+            let next = function(r){
+                $("input#batch_dispatch, input#batch_parse").addClass("ready");
+                show_text(popup_text("已获取文件"), 1500);
+                let htmls = "";
+                if(path){
+                    let ppath = path.split("/").slice(0, -1).join("/");
+                    if(code+"/" in window.localStorage2){
+                        let root = JSON.parse(window.localStorage2[code+"/"])[1]["data"]["list"][0]["path"];
+                        if(root===path){
+                            ppath = "";
+                        }
+                    }
+                    htmls += "<div class='parent' data-dir='"+$("<p/>").text(ppath).html()+"'>上级目录</div>";
+                }
+                let randsk = r["data"]["seckey"];
+                let share_id = r["data"]["shareid"];
+                let uk = r["data"]["uk"];
+                let folders = [];
+                let files = [];
+                for(let item of r["data"]["list"]){
+                    if(item["isdir"]==1){
+                        folders.push(item);
+                    }
+                    else{
+                        files.push(item);
+                    }
+                }
+                let template = [
+                    "",
+                    "<div class='dispatch'>&#x27A2;</div></div>"
+                ];
+                let is_file = !path&&!folders.length&&files.length===1;
+                for(let item of folders.sort(function (a,b) {
+                    return a["server_filename"].localeCompare(b["server_filename"]);
+                })){
+                    htmls += template[0]+"<div class='folder' data-dir='"+$("<p/>").text(item["path"]).html()+"'>"+item["server_filename"]+"</div>";
+                }
+                for(let item of files.sort(function (a,b) {
+                    return a["server_filename"].localeCompare(b["server_filename"]);
+                })){
+                    let data = "";
+                    for(let key of [
+                        "fs_id",
+                        "path",
+                        "server_filename",
+                        "size",
+                        "md5",
+                    ]){
+                        data += " data-"+key+"='"+$("<p/>").text(item[key]).html()+"'";
+                    }
+                    // htmls += template[0]+"<div class='file'><div class='info"+(item["fs_id"] in window.localStorage2?" parsed":"")+"'"+data+"><div>i</div></div><div class='name'><div style='word-break: break-all'><span style='word-break:keep-all;margin-right: 0.25em'>["+h_size(item["size"])+"]</span>"+item["server_filename"]+"</div></div>"+template[1];
+                    htmls += template[0]+"<div class='file'><div class='info"+(item["fs_id"] in window.localStorage2?" parsed":"")+"'"+data+">&#x01F504;</div><div class='name'><div style='word-break: break-all'><span style='word-break:keep-all;margin-right: 0.25em'>["+h_size(item["size"])+"]</span>"+item["server_filename"]+"</div></div>"+template[1];
+                }
+                $("div#content").empty().append(htmls);
+                $("div#content").find("div[data-dir]").on("click", function(){
+                    show_text(popup_text("获取文件中，请稍候"), 10*1000);
+                    get_content($(this).data("dir"));
+                }).map(function(i, e){
+                    // $(e).on(is_mobile?"touchstart":"mouseenter", function () {
+                    //     i===0&&path&&show_text(popup_text("返回上级目录"), 1500);
+                    //     i!==0&&show_text(popup_text("进入目录"), 1500);
+                    // });
+                });
+                let _parse = function(dispatch){
+                    show_text(popup_text("解析中，请稍候"), 10*1000);
+                    let data = [$(this).data("path").split("/").slice(0,-1).join("/"), $(this).data("server_filename"), $(this).data("size"), $(this).data("md5")];
+                    let _this = $(this);
+                    let next2 = function(r){
+                        _this.addClass("parsed");
+                        show_text(popup_text("已解析"), 1500);
+                        $("div#file_dialog input#ua").val(r["ua"]||"").closest("tr").hide();
+                        $("div#file_dialog input#path").val(data[0]);
+                        $("div#file_dialog input#name").val(data[1]);
+                        $("div#file_dialog input#size").val(data[2]);
+                        $("div#file_dialog input#md5").val(data[3]);
+                        $("div#file_dialog input#link").val(r["url"]);
+                        if(r["urls"]){
+                            let options = "";
+                            for(let url of r["urls"]){
+                                options += "<option>"+url+"</option>";
+                                window.get_suitable_ua(url.split("://").pop());
+                            }
+                            $("div#file_dialog select").empty().append(options);
+                        }
+                        $("div#dialog>div").addClass("hide");
+                        if(dispatch===1){
+                            $("div#file_dialog input#submit").trigger("click");
+                        }
+                        else if(dispatch===0){
+                            $("div#file_dialog").removeClass("hide");
+                        }
+                    }
+                    let fs_id = $(this).data("fs_id");
+                    if(dispatch===1 && (fs_id in window.localStorage2) && (new Date().getTime()/1000)-JSON.parse(window.localStorage2[fs_id])[0]<28800){
+                        next2(JSON.parse(window.localStorage2[fs_id])[1]);
+                    }
+                    else{
+                        let temp_get = function(token){
+                            $.post("https://"+window.location.host+"/api?get_file"+token, JSON.stringify([code, randsk, share_id, uk, fs_id, 1]), function (r) {
+                                try{
+                                    window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                                }catch(e){
+                                    clear_cache(1);
+                                    window.localStorage2[fs_id] = JSON.stringify([new Date().getTime()/1000, r]);
+                                }
+                                token&&window.token_ct();
+                                next2(r);
+                            }).fail(function(r){
+                                if(r.status===401){
+                                    show_text(popup_text("VIP 解析次数耗尽，普通重试中"), 10000);
+                                    temp_get("");
+                                    return;
+                                }
+                                if(r.status===429){
+                                    show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                                    return;
+                                }
+                                console.log(r);
+                                show_text(popup_text("解析失败，请重试"), 10*1000);
+                                // $.post("https://"+window.location.host+"/api?query"+token, function(r){
+                                //     let s = $("<div>"+r+"</div>").find("h2 a:not([href])").text();
+                                //     show_text(popup_text("解析失败，实时自动检测："+s), 10000);
+                                // }).fail(function (r) {
+                                //     ;
+                                // });
+                            });
+                        }
+                        temp_get(token);
+                    }
+                }
+                $("div#content").find("div[data-path]").on("click", function () {
+                    _parse.call(this, 0);
+                }).on(is_mobile?"touchstart":"mouseenter", function () {
+                    // show_text(popup_text($(this).hasClass("parsed")?"已解析，可以下载":"解析下载链接"), 1500);
+                    show_text(popup_text("重新解析"), 1500);
+                });
+                $("div#content").find("div.dispatch").on("click", function () {
+                    _parse.call($(this).prev().prev().get(0), 1);
+                }).on(is_mobile?"touchstart":"mouseenter", function () {
+                    show_text(popup_text("发送下载任务"), 1500);
+                });
+                // if(is_file){
+                //     $("div#content").find("div[data-path]").each(function(){
+                //         _parse.call(this, -1);
+                //     });
+                // }
+            }
+            if(code+"/"+path in window.localStorage2 && (new Date().getTime()/1000)-JSON.parse(window.localStorage2[code+"/"+path])[0]<28800){
+                next(JSON.parse(window.localStorage2[code+"/"+path])[1]);
+            }
+            else {
+                $.post(
+    "https://pan.baidu.com/share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1",
+    {
+        "shorturl": "1"+code,
+        "dir": path,
+        "root": path?"0":"1",
+        "pwd": pw,
+        "page": "1",
+        "num": "9999",
+        "order": "time",
+    }, function (r) {
+                    if(r["errno"]!=0){
+                        console.log(r);
+                        let msg = {
+                            "mis_105": "你所解析的文件不存在~",
+                            "mispw_9": "提取码错误",
+                            "mispwd-9": "提取码错误",
+                            "mis_2": "不存在此目录",
+                            3: "此链接分享内容可能因为涉及侵权、色情、反动、低俗等信息，无法访问！",
+                            0: "啊哦，你来晚了，分享的文件已经被删除了，下次要早点哟。",
+                            10: "啊哦，来晚了，该分享文件已过期"
+                        };
+                        msg = msg[r["errtype"]];
+                        if(!msg){
+                            show_text(popup_text("获取文件失败：自动重试中"), 10000);
+                            $("input#parse").trigger("click");
+                            return;
+                        }
+                        show_text(popup_text("获取文件失败："+msg), 10000);
+                        return;
+                    }
+                    try{
+                        window.localStorage2[code+"/"+path] = JSON.stringify([new Date().getTime()/1000, r]);
+                    }catch(e){
+                        clear_cache(1);
+                        window.localStorage2[code+"/"+path] = JSON.stringify([new Date().getTime()/1000, r]);
+                    }
+                    next(r);
+                }).fail(function(r){
+                    if(r.status===429){
+                        show_text(popup_text("操作频繁，请稍后重试"), 10000);
+                        return;
+                    }
+                    console.log(r)
+                    // alert(r.responseText);
+                    show_text(popup_text("获取文件失败："+r.responseText.replace(/\n/g, "<br/>")), 10000);
+                });
+            }
+        }
+        get_content(hash||"");
+    });
+    $("div#dialog input.close").on("click", function (e) {
+        $("div#dialog>div").addClass("hide");
+        if(!$("div#file_dialog input#ua").closest("tr").attr("style")){
+            if($(e.target).parent().attr("id")!=="token_history_dialog") {
+                $("div#token_history_dialog").removeClass("hide");
+            }
+            else{
+                $("div#file_dialog input#ua").closest("tr").hide();
+            }
+        }
+    });
+    $("div#file_dialog input[readonly]").on("click", function () {
+        $(this).select();
+        // document.execCommand("copy");
+        // temp = $(popup_text("已复制"));
+        // $("body").append(temp);
+        // temp.css({"top": e.pageY-temp.outerHeight()/2, "left": e.pageX-temp.outerWidth()/2});
+        // temp.css({"top": "15%", "left": $(window).width()/2});
+        // show_text(popup_text("已复制"), 1500);
+    });
+    $("div#dispatch_dialog input#save").on("click", function(){
+        let t = [
+            $("div#dispatch_dialog select#protocol").val()||"WS",
+            $("div#dispatch_dialog input#domain").val()||"127.0.0.1",
+            $("div#dispatch_dialog input#port").val()||"16800",
+            $("div#dispatch_dialog input#path2").val()||"jsonrpc",
+            $("div#dispatch_dialog input#secret").val()||"",
+            $("div#dispatch_dialog input#save_path").val()||"",
+            $("div#dispatch_dialog input#token").val()||"",
+            $("input[name='theme']:checked").val()
+        ];
+        token = t[6]?"&"+t[6]:"";
+        window.token_ct();
+        if(t[7]==="light"){
+            document.body.classList.add("light");
+        }
+        else{
+            document.body.classList.remove("light");
+        }
+        t = JSON.stringify(t);
+        try{
+            window.localStorage2["aria2_config"] = t;
+        }catch(e){
+            clear_cache(1);
+            window.localStorage2["aria2_config"] = t;
+        }
+        show_text(popup_text("已保存"), 1500);
+    });
+    let do_dispatch = function(cb){
+        if(!("aria2_config" in window.localStorage2)){
+            show_text(popup_text("请先完成配置"), 10000);
+            return;
+        }
+        show_text(popup_text("发送中，请稍候"), 10*1000);
+        let t = JSON.parse(window.localStorage2["aria2_config"]);
+        let dir = t[5]+$("div#file_dialog input#path").val();
+        dir = dir.replace(/[\/\\][\/\\]+/g, "/");
+        if(!t[5].length){
+            dir = dir.slice(1);
+        }
+        let uris =
+                // [$("div#file_dialog input#link").val()];
+                // $("div#file_dialog select#link option").map(function(i, e){
+                //     return $(e).text()+"&x_size="+$("div#file_dialog input#size").val();
+                // }).get();
+                // [$("div#file_dialog select#link").val()];
+                $("div#file_dialog select#link option").map(function(i, e){
+                    return $(e).text();
+                }).get().sort(function(a,b){
+                    a = a.split("/")[2];
+                    b = b.split("/")[2];
+                    if(a.indexOf("cache")!==-1&&b.indexOf("cache")!==-1){
+                        return a.localeCompare(b);
+                    }
+                    if(a.indexOf("cache")!==-1){
+                        return -1;
+                    }
+                    else{
+                        return 1;
+                    }
+                    return a.localeCompare(b);
+                });
+        let urisr = new Array(uris.length);
+        uris.map(function(url, i){
+            if($("div#file_dialog input#ua").val()){
+                urisr[i] = 1;
+            }
+            else{
+                window.get_suitable_ua(url.split("://").pop(), function(){
+                    urisr[i] = 1;
+                });
+            }
+        });
+        let dispatch = function(){
+            let options = {
+                "dir": dir,
+                "out": $("div#file_dialog input#name").val(),
+                "header": [
+                    "user-agent: foxe6",
+                    "accept: */*",
+                    "accept-language: zh-CN"
+                ],
+                // "max-connection-per-server": "96",
+                // "split": "96",
+                // "split": "8"//Math.ceil(parseInt($("div#file_dialog input#size").val())/1024/1024)
+            }
+            // if(!$("div#file_dialog input#ua").val()){
+                options["all-proxy"] = "http://127.0.0.1:"+window.aria2proxyport();
+            // }
+            let obj = {
+                "jsonrpc": "2.0",
+                "method": "aria2.addUri",
+                "id": "baiduwp.cf",
+                "params": (t[4]?["token:"+t[4]]:[]).concat([uris, options])
+            }
+            console.log(obj);
+            if(t[0]==="WS"||t[0]==="WSS"){
+                let socket = new WebSocket("ws"+(t[0]==="WSS"?"s":"")+"://"+t[1]+":"+t[2]+"/"+t[3]);
+                socket.onmessage = function(e){
+                    if("error" in JSON.parse(e.data)){
+                        console.log(e);
+                        // alert(e);
+                        show_text(popup_text(JSON.stringify(e.data)), 10000);
+                        cb&&cb(1);
+                    }
+                    else{
+                        socket.close(3001);
+                        // alert("发送成功");
+                        show_text(popup_text("发送成功"), 1500);
+                        cb&&cb(0);
+                    }
+                }
+                socket.onopen = function(){
+                    socket.send(JSON.stringify(obj));
+                }
+                socket.onclose = function(e){
+                    if(e.code!==3001){
+                        show_text(popup_text("发送失败"), 10*1000);
+                    }
+                }
+            }
+            else{
+                let method = t[0].indexOf("GET")!==-1?$.get:$.post;
+                method("http"+(t[0].indexOf("S")===0?"s":"")+"://"+t[1]+":"+t[2]+"/"+t[3], JSON.stringify(obj), function(r){
+                    if("error" in r){
+                        console.log(r);
+                        // alert(JSON.stringify(r));
+                        show_text(popup_text(JSON.stringify(r)), 10000);
+                        cb&&cb(1);
+                    }
+                    else{
+                        // alert("发送成功");
+                        show_text(popup_text("发送成功"), 1500);
+                        cb&&cb(0);
+                    }
+                }).fail(function(){
+                    show_text(popup_text("发送失败"), 10*1000);
+                });
+            }
+        }
+        let urisrti = setInterval(function(){
+            if(urisr.some(function(e){
+                return !e;
+            })){
+                return;
+            }
+            clearInterval(urisrti);
+            if(!uris.some(function(uri){
+                return is_completed_uris(uri);
+            })) {
+                dispatch();
+            }
+            else{
+                show_text(popup_text("检测文件已下载，取消发送"), 10*1000);
+                cb&&cb(0);
+            }
+        }, 500);
+    }
+    $("div#file_dialog input#submit").on("click", function () {
+        do_dispatch();
+    });
+    $("input#helpcenter").on("click", function(){
+        $("div#help_dialog").removeClass("hide");
+    })
+    $("div#help_dialog div.container").on("click", function(){
+        $(this).toggleClass("opened");
+    });
+    $("div#help_dialog div.container_content").on("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    if(window.localStorage2["aria2_config"]){
+        let t = JSON.parse(window.localStorage2["aria2_config"]);
+        $("div#dispatch_dialog select#protocol").val(t[0]);
+        $("div#dispatch_dialog input#domain").val(t[1]);
+        $("div#dispatch_dialog input#port").val(t[2]);
+        $("div#dispatch_dialog input#path2").val(t[3]);
+        $("div#dispatch_dialog input#secret").val(t[4]);
+        $("div#dispatch_dialog input#save_path").val(t[5]);
+        $("div#dispatch_dialog input#token").val(t[6]);
+        token = t[6]?"&"+t[6]:"";
+        window.token_ct();
+        if(t[7]==="light"){
+            document.querySelector("input[name='theme'][value='light']").checked = true;
+            document.body.classList.add("light");
+        }
+        else{
+            document.querySelector("input[name='theme'][value='dark']").checked = true;
+            document.body.classList.remove("light");
+        }
+    }
+    $.post("https://"+window.location.host+"/api?get_ua"+token, function(r){
+        window.download_useragent = r;
+        aria2reconnect();
+    }).fail(function(r){
+        ;
+    });
+    let completed_uris = [];
+    let is_completed_uris=function(w){
+        return completed_uris.indexOf(w)!==-1;
+    }
+    let aria2reconnect = function(){
+        let _aria2reconnect = function(){
+            if(!window.download_useragent){
+                return;
+            }
+            if(!window.localStorage2["aria2_config"]){
+                return;
+            }
+            let methods = [
+                ["tellActive", []],
+                ["tellWaiting", [0, 100]],
+                ["tellStopped", [0, 100]],
+            ];
+            let job=function(){
+                let meth = methods.pop();
+                if(!meth){
+                    return;
+                }
+                let t = JSON.parse(window.localStorage2["aria2_config"]);
+                let obj = {
+                    "jsonrpc": "2.0",
+                    "method": "aria2."+meth[0],
+                    "id": "baiduwp.cf",
+                    "params": (t[4]?["token:"+t[4]]:[]).concat(meth[1])
+                };
+                if(t[0]==="WS"||t[0]==="WSS"){
+                    let socket = new WebSocket("ws"+(t[0]==="WSS"?"s":"")+"://"+t[1]+":"+t[2]+"/"+t[3]);
+                    socket.onmessage = function(e){
+                        if("error" in JSON.parse(e.data)){
+                            // console.log(r);
+                        }
+                        else{
+                            e = JSON.parse(e.data);
+                            let seen = {};
+                            e["result"].map(function(ee){
+                                if(meth[0]==="tellStopped"&&ee["status"]!=="error"){
+                                    if(ee["status"]==="complete"){
+                                        ee["files"].map(function(eee){
+                                            eee["uris"].map(function(eeee){
+                                                let uri = eeee["uri"];
+                                                if(completed_uris.indexOf(uri)===-1) {
+                                                    completed_uris.push(uri);
+                                                }
+                                            });
+                                        });
+                                    }
+                                    return;
+                                }
+                                ee["files"].map(function(eee){
+                                    eee["uris"].map(function(eeee){
+                                        let uri = eeee["uri"];
+                                        if(uri in seen){
+                                            return;
+                                        }
+                                        seen[uri] = null;
+                                        window.get_suitable_ua(uri.split("://").pop(), function(){});
+                                    });
+                                });
+                            });
+                        }
+                        socket.close();
+                        job();
+                    }
+                    socket.onopen = function(){
+                        socket.send(JSON.stringify(obj));
+                    }
+                }
+                else{
+                    let method = t[0].indexOf("GET")!==-1?$.get:$.post;
+                    method("http"+(t[0].indexOf("S")===0?"s":"")+"://"+t[1]+":"+t[2]+"/"+t[3], JSON.stringify(obj), function(r){
+                        if("error" in r){
+                            // console.log(r);
+                        }
+                        else{
+                            let e = r;
+                            let seen = {};
+                            e["result"].map(function(ee){
+                                if(meth[0]==="tellStopped"&&ee["status"]!=="error"){
+                                    return;
+                                }
+                                ee["files"].map(function(eee){
+                                    eee["uris"].map(function(eeee){
+                                        let uri = eeee["uri"];
+                                        if(uri in seen){
+                                            return;
+                                        }
+                                        seen[uri] = null;
+                                        window.get_suitable_ua(uri.split("://").pop(), function(){});
+                                    });
+                                });
+                            });
+                        }
+                        job();
+                    });
+                }
+            }
+            job();
+        };
+        _aria2reconnect();
+        setInterval(_aria2reconnect, 5*1000);
+    };
+});
+</script>
+</body>
+</html>
