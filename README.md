@@ -1,4 +1,5 @@
 # fastfox
+AIO toolobx
 
 ## 在线解析 debrid premium
 - baidu 百度网盘
